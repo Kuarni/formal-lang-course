@@ -1,22 +1,56 @@
-from project.task_1_graph_utils import *
+from project.task_1_graph_utils import GraphData, get_graph_data, create_and_save_graph
 import shutil
 import os
 
 
 class TestGetGraphData:
     def test_graph_data_skos(self):
-        graph_name = 'skos'
-        labels = ['type', 'definition', 'isDefinedBy', 'label', 'subPropertyOf', 'comment', 'scopeNote', 'inverseOf',
-                  'range', 'domain', 'contributor', 'disjointWith', 'creator', 'example', 'first', 'rest',
-                  'description', 'seeAlso', 'subClassOf', 'title', 'unionOf']
+        graph_name = "skos"
+        labels = [
+            "type",
+            "definition",
+            "isDefinedBy",
+            "label",
+            "subPropertyOf",
+            "comment",
+            "scopeNote",
+            "inverseOf",
+            "range",
+            "domain",
+            "contributor",
+            "disjointWith",
+            "creator",
+            "example",
+            "first",
+            "rest",
+            "description",
+            "seeAlso",
+            "subClassOf",
+            "title",
+            "unionOf",
+        ]
         expected_graph_data = GraphData(144, 252, labels)
         assert get_graph_data(graph_name) == expected_graph_data
 
     def test_graph_data_gzip(self):
-        graph_name = 'foaf'
-        labels = ['type', 'label', 'comment', 'term_status', 'isDefinedBy', 'domain', 'range', 'subPropertyOf',
-                  'subClassOf', 'disjointWith', 'inverseOf', 'equivalentClass', 'description', 'equivalentProperty',
-                  'title']
+        graph_name = "foaf"
+        labels = [
+            "type",
+            "label",
+            "comment",
+            "term_status",
+            "isDefinedBy",
+            "domain",
+            "range",
+            "subPropertyOf",
+            "subClassOf",
+            "disjointWith",
+            "inverseOf",
+            "equivalentClass",
+            "description",
+            "equivalentProperty",
+            "title",
+        ]
         expected_graph_data = GraphData(256, 631, labels)
         assert get_graph_data(graph_name) == expected_graph_data
 
@@ -54,11 +88,9 @@ class TestCycledGraphCreater:
         with open(graph_path, "r") as f:
             assert f.read() == expected
 
-
     @classmethod
     def setup_class(cls):
         os.mkdir(cls.results_path)
-
 
     @classmethod
     def teardown_class(cls):

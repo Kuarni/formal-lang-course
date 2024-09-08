@@ -18,13 +18,21 @@ class GraphData:
 
 def get_graph_data(name: str) -> GraphData:
     graph = get_graph(name)
-    return GraphData(graph.number_of_nodes(), graph.number_of_edges(), cfpq_data.get_sorted_labels(graph))
+    return GraphData(
+        graph.number_of_nodes(),
+        graph.number_of_edges(),
+        cfpq_data.get_sorted_labels(graph),
+    )
 
 
 def save_pydot_graph(graph, save_path: str):
     nx.drawing.nx_pydot.write_dot(graph, save_path)
 
 
-def create_and_save_graph(cycle_1_nodes: int, cycle_2_nodes: int, labels: Tuple[str, str], save_path: str):
-    graph = cfpq_data.labeled_two_cycles_graph(cycle_1_nodes, cycle_2_nodes, labels=labels)
+def create_and_save_graph(
+    cycle_1_nodes: int, cycle_2_nodes: int, labels: Tuple[str, str], save_path: str
+):
+    graph = cfpq_data.labeled_two_cycles_graph(
+        cycle_1_nodes, cycle_2_nodes, labels=labels
+    )
     save_pydot_graph(graph, save_path)
