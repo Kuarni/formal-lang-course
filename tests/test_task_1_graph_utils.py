@@ -63,30 +63,13 @@ class TestCycledGraphCreater:
         return os.path.join(self.results_path, graph_name + ".dot")
 
     def test_graph_data_my_graph(self):
-        expected = """digraph  {
-1;
-2;
-3;
-4;
-5;
-0;
-6;
-7;
-1 -> 2 [key=0, label=Hello];
-2 -> 3 [key=0, label=Hello];
-3 -> 4 [key=0, label=Hello];
-4 -> 5 [key=0, label=Hello];
-5 -> 0 [key=0, label=Hello];
-0 -> 1 [key=0, label=Hello];
-0 -> 6 [key=0, label=world];
-6 -> 7 [key=0, label=world];
-7 -> 0 [key=0, label=world];
-}
-"""
+        reference_path = "task_1_reference_graph.dot"
+
         graph_path = self.get_graph_path("my_graph")
         create_and_save_graph(5, 2, ("Hello", "world"), graph_path)
         with open(graph_path, "r") as f:
-            assert f.read() == expected
+            with open(reference_path, "r") as reference:
+                assert f.read() == reference.read()
 
     @classmethod
     def setup_class(cls):
@@ -94,5 +77,4 @@ class TestCycledGraphCreater:
 
     @classmethod
     def teardown_class(cls):
-        pass
         shutil.rmtree(cls.results_path)
