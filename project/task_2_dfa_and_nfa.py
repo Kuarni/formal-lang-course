@@ -3,6 +3,7 @@ from networkx import MultiDiGraph
 from pyformlang.finite_automaton import (
     DeterministicFiniteAutomaton,
     NondeterministicFiniteAutomaton,
+    State,
 )
 from pyformlang.regular_expression import Regex
 
@@ -13,14 +14,19 @@ def regex_to_dfa(regex: str) -> DeterministicFiniteAutomaton:
 
 
 def graph_to_nfa(
-    graph: MultiDiGraph, start_states: Set[int], final_states: Set[int]
+    graph: MultiDiGraph, start_states: Set[int] = None, final_states: Set[int] = None
 ) -> NondeterministicFiniteAutomaton:
     nfa = NondeterministicFiniteAutomaton.from_networkx(graph)
 
-    if (start_states and final_states) is None:
-        nfa.start_states = nfa.states
-        nfa.final_states = nfa.states
-    else:
-        nfa.start_states = start_states
-        nfa.final_states = final_states
+    start_states_ = (
+        [State(str(i)) for i in start_states] if start_states else nfa.states
+    )
+    final_states_ = (
+        [State(str(i)) for i in final_states] if final_states else nfa.states
+    )
+
+    for i in start_states_:
+        nfa.add_start_state(State(i))
+    for i in final_states_:
+        nfa.add_final_state(State(i))
     return nfa
