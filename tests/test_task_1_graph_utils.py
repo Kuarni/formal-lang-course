@@ -2,6 +2,8 @@ from project.task_1_graph_utils import GraphData, get_graph_data, create_and_sav
 import shutil
 import os
 
+from utils import get_path_in_same_dir
+
 
 class TestGetGraphData:
     def test_graph_data_skos(self):
@@ -63,7 +65,7 @@ class TestCycledGraphCreater:
         return os.path.join(self.results_path, graph_name + ".dot")
 
     def test_graph_data_my_graph(self):
-        reference_path = "task_1_reference_graph.dot"
+        reference_path = get_path_in_same_dir(__file__, "task_1_reference_graph.dot")
 
         graph_path = self.get_graph_path("my_graph")
         create_and_save_graph(5, 2, ("Hello", "world"), graph_path)
