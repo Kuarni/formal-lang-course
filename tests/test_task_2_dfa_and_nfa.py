@@ -90,6 +90,13 @@ class TestGraphToNfa:
         assert not nfa.is_deterministic()
 
     @staticmethod
+    def load_graph(graph_path):
+        graph = nx.drawing.nx_pydot.read_dot(graph_path)
+        for i in graph:
+            graph = nx.relabel_nodes(graph, {i: int(i)})
+        return graph
+
+    @staticmethod
     def get_expected_nfa_for_tests(start_states, final_states):
         expected_nfa = NondeterministicFiniteAutomaton()
         for i in start_states:
@@ -120,7 +127,7 @@ class TestGraphToNfa:
         graph_path = self.get_graph_path("graph_2")
         create_and_save_graph(1, 1, ("a", "b"), graph_path)
 
-        graph = nx.drawing.nx_pydot.read_dot(graph_path)
+        graph = self.load_graph(graph_path)
         nfa = graph_to_nfa(graph, {1}, {2})
 
         assert len(nfa.start_states) == 1
@@ -133,7 +140,7 @@ class TestGraphToNfa:
         graph_path = self.get_graph_path("graph_3")
         create_and_save_graph(1, 1, ("a", "b"), graph_path)
 
-        graph = nx.drawing.nx_pydot.read_dot(graph_path)
+        graph = self.load_graph(graph_path)
         nfa = graph_to_nfa(graph, {1, 0}, {2})
 
         assert len(nfa.start_states) == 2
