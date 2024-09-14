@@ -5,7 +5,7 @@ from collections.abc import Iterable
 from pyformlang.finite_automaton import Symbol, NondeterministicFiniteAutomaton, State
 
 from project.task_1_graph_utils import get_graph, create_and_save_graph
-from project.task_2_dfa_and_nfa import regex_to_dfa, graph_to_nfa
+from project.task2 import regex_to_dfa, graph_to_nfa
 
 
 class TestRegexToDfa:
