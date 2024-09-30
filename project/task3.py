@@ -169,6 +169,10 @@ class AdjacencyMatrixFA:
     def states_to_num(self):
         return self._states_to_num
 
+    @property
+    def adj_matrices(self):
+        return self._adj_matrices
+
 
 def intersect_automata(
     automaton1: AdjacencyMatrixFA, automaton2: AdjacencyMatrixFA
