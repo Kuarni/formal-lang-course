@@ -22,9 +22,9 @@ class AdjacencyMatrixFA:
     def __enumerate_value(value) -> dict[Any, int]:
         return {val: idx for idx, val in enumerate(value)}
 
-    def __get_symbol_adj_matrix_dict(self, nfa) -> dict[Symbol, np.ndarray]:
+    def __get_symbol_adj_matrix_dict(self, nfa) -> dict[Symbol, sp.lil_matrix]:
         symbol_state = defaultdict(
-            lambda: np.zeros((len(nfa.states), len(nfa.states)), dtype=bool)
+            lambda: sp.lil_matrix((len(nfa.states), len(nfa.states)), dtype=bool)
         )
         for start_state, value in nfa.to_dict().items():
             for symbol, end_states in value.items():
@@ -53,8 +53,10 @@ class AdjacencyMatrixFA:
 
         symbol_adj_matrix = self.__get_symbol_adj_matrix_dict(nfa)
 
-        for symbol, matrix in symbol_adj_matrix.items():
-            self._adj_matrices[symbol] = self._matrix_type(matrix, dtype=bool)
+        for symbol in list(symbol_adj_matrix.keys()):
+            self._adj_matrices[symbol] = self._matrix_type(
+                symbol_adj_matrix.pop(symbol), dtype=bool
+            )
 
     def __dfs_find_path(self, word: Iterable[Symbol]):
         @dataclass
@@ -87,19 +89,11 @@ class AdjacencyMatrixFA:
     def accepts(self, word: Iterable[Symbol]) -> bool:
         return self.__dfs_find_path(word)
 
-    @staticmethod
-    def __warshall(matrix: _matrix_type):
-        matrix_ = matrix.todense()
-        size = matrix_.shape[0]
-        for k in range(size):
-            for i in range(size):
-                for j in range(size):
-                    matrix_[i, j] = matrix_[i, j] or (matrix_[i, k] and matrix_[k, j])
-        return matrix_
-
     def transitive_closure(self) -> np.ndarray:
         sum_matrix = self._matrix_type(sum(self._adj_matrices.values()))
-        return self.__warshall(sum_matrix)
+        sum_matrix.setdiag(True)
+        res = sp.linalg.matrix_power(sum_matrix, self._states_number)
+        return res
 
     def is_empty(self) -> bool:
         if not self._adj_matrices:
