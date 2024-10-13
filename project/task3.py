@@ -1,27 +1,30 @@
 from collections import defaultdict
 from dataclasses import dataclass
 from itertools import product
-from typing import Any, Iterable, List, Optional, Self
+from typing import Iterable, List, Optional, Self, Generic, TypeVar, cast
 from networkx import MultiDiGraph
 from pyformlang.finite_automaton import NondeterministicFiniteAutomaton, State, Symbol
 import scipy.sparse as sp
 
 from project.task2 import regex_to_dfa, graph_to_nfa
 
+Matrix = TypeVar("Matrix")
 
-class AdjacencyMatrixFA:
-    _matrix_type: type(sp.spmatrix)
-    _adj_matrices: dict[Symbol, type(sp.spmatrix)]
+
+class AdjacencyMatrixFA(Generic[Matrix]):
+    _matrix_type: Matrix
+    _adj_matrices: dict[Symbol, Matrix]
     _states_number: int
     _start_states: set[int]
     _final_states: set[int]
     _states_to_num: dict[State, int]
+    _num_to_state: List[State]
 
     @staticmethod
-    def __enumerate_value(value) -> dict[Any, int]:
+    def __enumerate_value(value) -> dict[State, int]:
         return {val: idx for idx, val in enumerate(value)}
 
-    def __get_symbol_adj_matrix_dict(self, nfa) -> dict[Symbol, sp.spmatrix]:
+    def __get_symbol_adj_matrix_dict(self, nfa) -> dict[Symbol, Matrix]:
         symbol_state = defaultdict(
             lambda: self._matrix_type((len(nfa.states), len(nfa.states)), dtype=bool)
         )
@@ -36,7 +39,9 @@ class AdjacencyMatrixFA:
         return symbol_state
 
     def __init__(
-        self, nfa: Optional[NondeterministicFiniteAutomaton], matrix_type=sp.csr_matrix
+        self,
+        nfa: Optional[NondeterministicFiniteAutomaton],
+        matrix_type: Matrix = sp.lil_matrix,
     ):
         self._matrix_type = matrix_type
         self._adj_matrices = dict()
@@ -47,6 +52,7 @@ class AdjacencyMatrixFA:
             return
 
         self._states_to_num = self.__enumerate_value(nfa.states)
+        self._num_to_state = [el for el in nfa.states]
 
         self._states_number = len(nfa.states)
 
@@ -86,11 +92,28 @@ class AdjacencyMatrixFA:
     def accepts(self, word: Iterable[Symbol]) -> bool:
         return self.__dfs_find_path(word)
 
-    def transitive_closure(self) -> type(sp.spmatrix):
-        sum_matrix = self._matrix_type(sum(self._adj_matrices.values()))
-        sum_matrix.setdiag(True)
-        res = sp.linalg.matrix_power(sum_matrix, self._states_number)
-        return res
+    def __pow_closure(self, matrix):
+        cur = matrix
+        power = 1
+        for i in range(2, self._states_number + 1):
+            power *= i
+            prev = cur
+            cur = sp.linalg.matrix_power(prev, i)
+            if power > self._states_number:
+                break
+            if prev.nnz == cur.nnz:
+                if (cur != prev).nnz == 0:
+                    break
+        return cur
+
+    def transitive_closure(self) -> Matrix:
+        if self._adj_matrices:
+            sum_matrix = cast(Matrix, sum(self._adj_matrices.values()))
+            sum_matrix.setdiag(True)
+            res = self.__pow_closure(sum_matrix)
+            return res
+        else:
+            return sp.identity(self._states_number)
 
     def is_empty(self) -> bool:
         if not self._adj_matrices:
@@ -104,9 +127,9 @@ class AdjacencyMatrixFA:
 
     @classmethod
     def from_intersect(
-        cls, automaton1: Self, automaton2: Self, matrix_type=sp.csr_matrix
+        cls, automaton1: Self, automaton2: Self, matrix_type: Matrix = sp.lil_matrix
     ):
-        instance = cls(None, matrix_type=matrix_type)
+        instance = cls(None, matrix_type)
         united_syms = [
             sym
             for sym in set(automaton1._adj_matrices.keys()).intersection(
@@ -114,12 +137,9 @@ class AdjacencyMatrixFA:
             )
         ]
 
-        def get_kron_spare(matrix1, matrix2):
-            return instance._matrix_type(sp.kron(matrix1, matrix2))
-
         instance._adj_matrices = {
-            sym: get_kron_spare(
-                automaton1._adj_matrices[sym], automaton2._adj_matrices[sym]
+            sym: instance._matrix_type(
+                sp.kron(automaton1._adj_matrices[sym], automaton2._adj_matrices[sym])
             )
             for sym in united_syms
         }
@@ -136,6 +156,10 @@ class AdjacencyMatrixFA:
                 automaton1._states_to_num.items(), automaton2._states_to_num.items()
             )
         }
+        instance._num_to_state = [
+            State(el)
+            for el in product(automaton1._num_to_state, automaton2._num_to_state)
+        ]
 
         instance._start_states = intersect_states(
             automaton1._start_states, automaton2._start_states
@@ -166,6 +190,10 @@ class AdjacencyMatrixFA:
     def adj_matrices(self):
         return self._adj_matrices
 
+    @property
+    def num_to_state(self):
+        return self._num_to_state
+
 
 def intersect_automata(
     automaton1: AdjacencyMatrixFA, automaton2: AdjacencyMatrixFA
@@ -178,43 +206,23 @@ def tensor_based_rpq(
     graph: MultiDiGraph,
     start_nodes: set[int],
     final_nodes: set[int],
-    matrix_type=sp.csr_matrix,
+    matrix_type=sp.lil_matrix,
 ) -> set[tuple[int, int]]:
     regex_dfa = regex_to_dfa(regex)
-    adj_regex = AdjacencyMatrixFA(regex_dfa, matrix_type=matrix_type)
+    adj_regex = AdjacencyMatrixFA(regex_dfa, matrix_type)
     graph_nfa = graph_to_nfa(graph, start_nodes, final_nodes)
-    adj_graph = AdjacencyMatrixFA(graph_nfa, matrix_type=matrix_type)
-    adj_intersect = AdjacencyMatrixFA.from_intersect(
-        adj_graph, adj_regex, matrix_type=matrix_type
-    )
+    adj_graph = AdjacencyMatrixFA(graph_nfa, matrix_type)
+    adj_intersect = AdjacencyMatrixFA.from_intersect(adj_graph, adj_regex, matrix_type)
 
     adj_closure = adj_intersect.transitive_closure()
 
-    def get_state(st1, st2):
-        return adj_intersect.states_to_num[State((st1, st2))]
-
-    if adj_intersect.is_empty():
-        result = set()
-    else:
-        result = set(
-            state_pair
-            for dfa_states_pair in product(
-                regex_dfa.start_states, regex_dfa.final_states
-            )
-            for state_pair in product(graph_nfa.start_states, graph_nfa.final_states)
-            if adj_closure[
-                get_state(state_pair[0], dfa_states_pair[0]),
-                get_state(state_pair[1], dfa_states_pair[1]),
-            ]
+    result = {
+        (
+            adj_intersect.num_to_state[start].value[0],
+            adj_intersect.num_to_state[final].value[0],
         )
-
-    if adj_intersect.accepts([]):
-        result = result.union(
-            set(
-                i
-                for i in product(graph_nfa.start_states, graph_nfa.final_states)
-                if i[0] == i[1]
-            )
-        )
+        for start, final in zip(*adj_closure.nonzero())
+        if start in adj_intersect.start_states and final in adj_intersect.final_states
+    }
 
     return result
