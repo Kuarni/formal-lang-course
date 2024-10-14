@@ -1,3 +1,4 @@
+from copy import copy
 from functools import reduce
 from typing import Generic, TypeVar
 from networkx import MultiDiGraph
@@ -43,7 +44,7 @@ class MsBfsRpq(Generic[Matrix]):
 
     def __update_front(self, front_right: Matrix) -> Matrix:
         def front_mul_matrix(cur_front, symbol) -> Matrix:
-            mul = self.__matrix_type(cur_front @ self.__adj_nfa.adj_matrices[symbol])
+            mul = cur_front @ self.__adj_nfa.adj_matrices[symbol]
             return self.__permutation_matrices[symbol] @ mul
 
         updated_front = reduce(
@@ -86,7 +87,7 @@ class MsBfsRpq(Generic[Matrix]):
 
     def __ms_bfs(self):
         front_right = self.__get_init_front()
-        visited = self.__matrix_type(front_right, dtype=bool)
+        visited = copy(front_right)
 
         while front_right.count_nonzero():
             front_right = self.__update_front(front_right)
