@@ -1,7 +1,5 @@
-from collections import defaultdict
 from functools import reduce
-from itertools import product
-from typing import Dict
+from typing import Generic, TypeVar
 from networkx import MultiDiGraph
 from pyformlang.finite_automaton import Symbol
 import scipy.sparse as sp
@@ -9,44 +7,15 @@ import scipy.sparse as sp
 from project.task2 import regex_to_dfa, graph_to_nfa
 from project.task3 import AdjacencyMatrixFA
 
+Matrix = TypeVar("Matrix")
 
-class MsBfsRpq:
-    __matrix_type: type(sp.spmatrix)
+
+class MsBfsRpq(Generic[Matrix]):
+    __matrix_type: Matrix
     __adj_dfa: AdjacencyMatrixFA
     __adj_nfa: AdjacencyMatrixFA
     __shift: int
-    __intersected_symbols: set[Symbol]
-    __adj_united: Dict[Symbol, type(sp.spmatrix)]
-    __init_front: type(sp.spmatrix)
-    __front_left: type(sp.spmatrix)
-
-    def __unite_matrices(self) -> dict[Symbol, type(sp.spmatrix)]:
-        return {
-            symbol: sp.block_diag(
-                (
-                    self.__adj_dfa.adj_matrices[symbol],
-                    self.__adj_nfa.adj_matrices[symbol],
-                )
-            )
-            for symbol in self.__intersected_symbols
-        }
-
-    def __get_init_front(self) -> type(sp.spmatrix):
-        left_vector = sp.identity(self.__shift, dtype=bool)
-
-        vectors = []
-        for nfa_state_num in range(len(self.__adj_nfa.start_states)):
-            right_vector = self.__matrix_type(
-                (self.__shift, self.__adj_nfa.states_number), dtype=bool
-            )
-            for i in self.__adj_dfa.start_states:
-                right_vector[i, self.__start_states_list[nfa_state_num]] = True
-
-            vectors.append(sp.block_array([[left_vector, right_vector]]))
-
-        return self.__matrix_type(
-            reduce(lambda a, b: sp.block_array([[a], [b]]), vectors)
-        )
+    __united_symbols: set[Symbol]
 
     def __init__(
         self,
@@ -59,50 +28,64 @@ class MsBfsRpq:
         self.__adj_nfa = adj_nfa
         self.__start_states_list = list(adj_nfa.start_states)
         self.__shift = self.__adj_dfa.states_number
-        self.__intersected_symbols = set(
-            self.__adj_dfa.adj_matrices.keys()
-        ).intersection(self.__adj_nfa.adj_matrices.keys())
-        self.__adj_united = self.__unite_matrices()
-        self.__init_front = self.__get_init_front()
-        self.__front_left = self.__init_front[:, : self.__shift]
-
-    def __update_front(self, front_right: sp.spmatrix) -> type(sp.spmatrix):
-        def front_mul_matrix(cur_front, matrix) -> type(sp.spmatrix):
-            mul = self.__matrix_type(cur_front @ matrix)
-            diag_front_right = self.__matrix_type(front_right.shape, dtype=bool)
-
-            for i, j in zip(*mul[:, : self.__shift].nonzero()):
-                diag_front_right[i // self.__shift * self.__shift + j, :] += mul[
-                    i, self.__shift :
+        self.__united_symbols = set(self.__adj_dfa.adj_matrices.keys()).intersection(
+            self.__adj_nfa.adj_matrices.keys()
+        )
+        self.__permutation_matrices = {
+            symbol: sp.block_diag(
+                [
+                    adj_dfa.adj_matrices[symbol].transpose()
+                    for _ in self.__start_states_list
                 ]
-            return diag_front_right
+            )
+            for symbol in self.__united_symbols
+        }
 
-        front = sp.block_array([[self.__front_left, front_right]])
+    def __update_front(self, front_right: Matrix) -> Matrix:
+        def front_mul_matrix(cur_front, symbol) -> Matrix:
+            mul = self.__matrix_type(cur_front @ self.__adj_nfa.adj_matrices[symbol])
+            return self.__permutation_matrices[symbol] @ mul
+
         updated_front = reduce(
-            lambda vector, matrix: vector + front_mul_matrix(front, matrix),
-            self.__adj_united.values(),
+            lambda vector, matrix: vector + front_mul_matrix(front_right, matrix),
+            self.__united_symbols,
             self.__matrix_type(front_right.shape, dtype=bool),
         )
 
         return updated_front
 
-    def __visited_to_dict(self, visited: sp.spmatrix) -> dict[int, set[int]]:
-        start_to_reachable = defaultdict(set)
-        for start_state, final_state in product(
-            range(len(self.__start_states_list)), self.__adj_dfa.final_states
-        ):
-            states_reachable_from_end = set(
-                visited[start_state * self.__shift + final_state, :].nonzero()[1]
+    def __get_init_front(self) -> Matrix:
+        vectors = []
+        for nfa_state_num in range(len(self.__adj_nfa.start_states)):
+            right_vector = self.__matrix_type(
+                (self.__shift, self.__adj_nfa.states_number), dtype=bool
             )
-            start_to_reachable[self.__start_states_list[start_state]].update(
-                states_reachable_from_end
-            )
-        return start_to_reachable
+            for i in self.__adj_dfa.start_states:
+                right_vector[i, self.__start_states_list[nfa_state_num]] = True
 
-    def __ms_bfs(self) -> dict[int, set[int]]:
-        front_right = self.__matrix_type(
-            self.__init_front[:, self.__shift :], dtype=bool
-        )
+            vectors.append(right_vector)
+
+        return sp.vstack(vectors)
+
+    def __visited_to_result(self, visited: Matrix):
+        result = set()
+        for left, nfa_state in zip(*visited.nonzero()):
+            if (
+                left % self.__shift in self.__adj_dfa.final_states
+                and nfa_state in self.__adj_nfa.final_states
+            ):
+                result.add(
+                    (
+                        self.__adj_nfa.num_to_state[
+                            self.__start_states_list[left // self.__shift]
+                        ],
+                        self.__adj_nfa.num_to_state[nfa_state],
+                    )
+                )
+        return result
+
+    def __ms_bfs(self):
+        front_right = self.__get_init_front()
         visited = self.__matrix_type(front_right, dtype=bool)
 
         while front_right.count_nonzero():
@@ -110,9 +93,9 @@ class MsBfsRpq:
             front_right = front_right > visited
             visited += front_right
 
-        return self.__visited_to_dict(visited)
+        return self.__visited_to_result(visited)
 
-    def __call__(self) -> dict[int, set[int]]:
+    def __call__(self) -> set[tuple[int, int]]:
         return self.__ms_bfs()
 
 
@@ -130,9 +113,4 @@ def ms_bfs_based_rpq(
 
     result = MsBfsRpq(adj_dfa, adj_nfa, matrix_type)()
 
-    retrieved_states = {
-        (start, final)
-        for start, final in product(graph_nfa.start_states, graph_nfa.final_states)
-        if adj_nfa.states_to_num[final] in result[adj_nfa.states_to_num[start]]
-    }
-    return retrieved_states
+    return result
