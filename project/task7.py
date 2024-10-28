@@ -1,6 +1,5 @@
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Any, Dict, List
 import networkx as nx
 from pyformlang.cfg import CFG, Terminal, Variable
 from scipy.sparse import csr_matrix
@@ -19,16 +18,22 @@ class __AlgoData:
 
 
 def __init_var_matrices(adata: __AlgoData):
-    var_matrices = defaultdict(lambda: adata.matrix_type((adata.nodes_amount, adata.nodes_amount), dtype=bool))
+    var_matrices = defaultdict(
+        lambda: adata.matrix_type((adata.nodes_amount, adata.nodes_amount), dtype=bool)
+    )
     for u, v, data in adata.graph.edges(data=True):
         label = data.get("label")
         if label is not None:
             for production in adata.wnf.productions:
-                if len(production.body) == 1 and isinstance(production.body[0], Terminal):
+                if len(production.body) == 1 and isinstance(
+                    production.body[0], Terminal
+                ):
                     terminal = production.body[0].value
                     if terminal == label:
                         head = production.head
-                        var_matrices[head][adata.node_to_index[u], adata.node_to_index[v]] = True
+                        var_matrices[head][
+                            adata.node_to_index[u], adata.node_to_index[v]
+                        ] = True
     return var_matrices
 
 
@@ -37,7 +42,9 @@ def __add_nullable(adata: __AlgoData, var_matrices):
     for node in adata.graph.nodes:
         for var in nullable:
             var = Variable(var.value)
-            var_matrices[var][adata.node_to_index[node], adata.node_to_index[node]] = True
+            var_matrices[var][adata.node_to_index[node], adata.node_to_index[node]] = (
+                True
+            )
 
 
 def __matrix_hellings(adata: __AlgoData, var_matrices):
@@ -62,20 +69,24 @@ def __get_results(adata: __AlgoData, var_matrices, start_nodes, final_nodes):
     result_pairs = set()
     start_symbol = adata.wnf.start_symbol
     if start_symbol in var_matrices:
-        result_pairs |= {(u, v) for u, v in
-                         map(lambda pair: map(lambda i: adata.index_to_node[i], pair),
-                             zip(*var_matrices[start_symbol].nonzero())) if (not start_nodes or u in start_nodes) and (
-                                 not final_nodes or v in final_nodes
-                         )}
+        result_pairs |= {
+            (u, v)
+            for u, v in map(
+                lambda pair: map(lambda i: adata.index_to_node[i], pair),
+                zip(*var_matrices[start_symbol].nonzero()),
+            )
+            if (not start_nodes or u in start_nodes)
+            and (not final_nodes or v in final_nodes)
+        }
     return result_pairs
 
 
 def matrix_based_cfpq(
-        cfg: CFG,
-        graph: nx.DiGraph,
-        start_nodes: set[int] = None,
-        final_nodes: set[int] = None,
-        matrix_type=csr_matrix
+    cfg: CFG,
+    graph: nx.DiGraph,
+    start_nodes: set[int] = None,
+    final_nodes: set[int] = None,
+    matrix_type=csr_matrix,
 ) -> set[tuple[int, int]]:
     weak_normal_form = cfg_to_weak_normal_form(cfg)
     adata = __AlgoData(weak_normal_form, graph, matrix_type)
